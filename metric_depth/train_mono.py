@@ -88,8 +88,7 @@ def main_worker(gpu, ngpus_per_node, config):
         config.gpu = gpu
 
         model = build_model(config)
-        # print(model)
-            
+
         model = load_ckpt(config, model)
         model = parallelize(config, model)
 
@@ -110,33 +109,48 @@ def main_worker(gpu, ngpus_per_node, config):
 
 
 if __name__ == '__main__':
-    mp.set_start_method('forkserver')
-
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--model", type=str, default="synunet")
     parser.add_argument("-d", "--dataset", type=str, default='nyu')
     parser.add_argument("--trainer", type=str, default=None)
+    parser.add_argument("--debug", action='store_true', default=False)
+    parser.add_argument("--workers", type=int, default=4,
+                        help="Number of data loading workers (default: 4)")
+    parser.add_argument("--bs", type=int, default=16,
+                        help="Batch size (default: 16)")
+    parser.add_argument("--save_dir", type=str, default="./results")
+    parser.add_argument("--experiment_name", type=str)
 
     args, unknown_args = parser.parse_known_args()
     overwrite_kwargs = parse_unknown(unknown_args)
+    
+    if not args.debug:
+        mp.set_start_method('forkserver')
 
     overwrite_kwargs["model"] = args.model
     if args.trainer is not None:
         overwrite_kwargs["trainer"] = args.trainer
 
     config = get_config(args.model, "train", args.dataset, **overwrite_kwargs)
-    # git_commit()
+    config.name = args.experiment_name
+    config.save_dir = args.save_dir
+
     if config.use_shared_dict:
         shared_dict = mp.Manager().dict()
     else:
         shared_dict = None
     config.shared_dict = shared_dict
 
-    config.batch_size = config.bs
+    config.batch_size = args.bs
     config.mode = 'train'
     if config.root != "." and not os.path.isdir(config.root):
         os.makedirs(config.root)
 
+    if args.debug:
+        config.debug = True
+        config.distributed = False
+        config.batch_size = 2
+        config.log = False
     try:
         node_str = os.environ['SLURM_JOB_NODELIST'].replace(
             '[', '').replace(']', '')
@@ -144,7 +158,6 @@ if __name__ == '__main__':
 
         config.world_size = len(nodes)
         config.rank = int(os.environ['SLURM_PROCID'])
-        # config.save_dir = "/ibex/scratch/bhatsf/videodepth/checkpoints"
 
     except KeyError as e:
         # We are NOT using SLURM
@@ -153,7 +166,6 @@ if __name__ == '__main__':
         nodes = ["127.0.0.1"]
 
     if config.distributed:
-
         print(config.rank)
         port = np.random.randint(15000, 15025)
         config.dist_url = 'tcp://{}:{}'.format(nodes[0], port)
@@ -162,7 +174,7 @@ if __name__ == '__main__':
         config.gpu = None
 
     ngpus_per_node = torch.cuda.device_count()
-    config.num_workers = config.workers
+    config.num_workers = 0 if args.debug else args.workers
     config.ngpus_per_node = ngpus_per_node
     print("Config:")
     pprint(config)

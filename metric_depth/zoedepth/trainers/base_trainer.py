@@ -145,14 +145,14 @@ class BaseTrainer:
             self.config.uid = str(uuid.uuid4()).split('-')[-1]
         run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-{self.config.uid}"
         self.config.run_id = run_id
-        self.config.experiment_id = f"{self.config.name}{self.config.version_name}_{run_id}"
+        self.config.experiment_id = f"{self.config.name}-{self.config.version_name}_{run_id}"
         self.should_write = ((not self.config.distributed)
                              or self.config.rank == 0)
-        self.should_log = self.should_write  # and logging
+        self.should_log = self.should_write and self.config.get('log', True)  # and logging
         if self.should_log:
             tags = self.config.tags.split(
                 ',') if self.config.tags != '' else None
-            wandb.init(project=self.config.project, name=self.config.experiment_id, config=flatten(self.config), dir=self.config.root,
+            wandb.init(project=self.config.project, name=self.config.name, config=flatten(self.config), dir=self.config.root,
                        tags=tags, notes=self.config.notes, settings=wandb.Settings(start_method="fork"))
 
         self.model.train()

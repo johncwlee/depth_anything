@@ -33,17 +33,18 @@ import platform
 
 ROOT = pathlib.Path(__file__).parent.parent.resolve()
 
-HOME_DIR = os.path.expanduser("./data")
+# HOME_DIR = os.path.expanduser("./data")
+HOME_DIR = "/home/johnl/data"
 
 COMMON_CONFIG = {
     "save_dir": os.path.expanduser("./depth_anything_finetune"),
-    "project": "ZoeDepth",
+    "project": "Depth Anything",
     "tags": '',
     "notes": "",
     "gpu": None,
     "root": ".",
     "uid": None,
-    "print_losses": False
+    "print_losses": True
 }
 
 DATASETS_CONFIG = {
@@ -51,13 +52,13 @@ DATASETS_CONFIG = {
         "dataset": "kitti",
         "min_depth": 0.001,
         "max_depth": 80,
-        "data_path": os.path.join(HOME_DIR, "Kitti/raw_data"),
-        "gt_path": os.path.join(HOME_DIR, "Kitti/data_depth_annotated_zoedepth"),
+        "data_path": os.path.join(HOME_DIR, "kitti/raw_data"),
+        "gt_path": os.path.join(HOME_DIR, "kitti/gt_depth"),
         "filenames_file": "./train_test_inputs/kitti_eigen_train_files_with_gt.txt",
         "input_height": 352,
         "input_width": 1216,  # 704
-        "data_path_eval": os.path.join(HOME_DIR, "Kitti/raw_data"),
-        "gt_path_eval": os.path.join(HOME_DIR, "Kitti/data_depth_annotated_zoedepth"),
+        "data_path_eval": os.path.join(HOME_DIR, "kitti/raw_data"),
+        "gt_path_eval": os.path.join(HOME_DIR, "kitti/gt_depth"),
         "filenames_file_eval": "./train_test_inputs/kitti_eigen_test_files_with_gt.txt",
 
         "min_depth_eval": 1e-3,
@@ -74,13 +75,13 @@ DATASETS_CONFIG = {
         "dataset": "kitti",
         "min_depth": 0.001,
         "max_depth": 80,
-        "data_path": os.path.join(HOME_DIR, "Kitti/raw_data"),
-        "gt_path": os.path.join(HOME_DIR, "Kitti/data_depth_annotated_zoedepth"),
+        "data_path": os.path.join(HOME_DIR, "kitti/raw_data"),
+        "gt_path": os.path.join(HOME_DIR, "kitti/gt_depth"),
         "filenames_file": "./train_test_inputs/kitti_eigen_train_files_with_gt.txt",
         "input_height": 352,
         "input_width": 1216,
         "data_path_eval": os.path.join(HOME_DIR, "Kitti/raw_data"),
-        "gt_path_eval": os.path.join(HOME_DIR, "Kitti/data_depth_annotated_zoedepth"),
+        "gt_path_eval": os.path.join(HOME_DIR, "Kitti/gt_depth"),
         "filenames_file_eval": "./train_test_inputs/kitti_eigen_test_files_with_gt.txt",
 
         "min_depth_eval": 1e-3,
@@ -417,8 +418,8 @@ def get_config(model_name, mode='train', dataset=None, **overwrite_kwargs):
         orig_dataset = dataset
         if dataset == "mix":
             dataset = 'nyu'  # Use nyu as default for mix. Dataset config is changed accordingly while loading the dataloader
-        if dataset is not None:
-            config['project'] = f"MonoDepth3-{orig_dataset}"  # Set project for wandb
+        # if dataset is not None:
+            # config['project'] = f"MonoDepth3-{orig_dataset}"  # Set project for wandb
 
     if dataset is not None:
         config['dataset'] = dataset

@@ -1,0 +1,5 @@
+assets
+**pycache
+__pycache__
+*.pyc
+*.jpg

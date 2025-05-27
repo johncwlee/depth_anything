@@ -133,9 +133,7 @@ class DepthDataLoader(object):
             transform = preprocessing_transforms(mode, size=img_size)
 
         if mode == 'train':
-
-            Dataset = DataLoadPreprocess
-            self.training_samples = Dataset(
+            self.training_samples = DataLoadPreprocess(
                 config, mode, transform=transform, device=device)
 
             if config.distributed:
@@ -147,10 +145,9 @@ class DepthDataLoader(object):
             self.data = DataLoader(self.training_samples,
                                    batch_size=config.batch_size,
                                    shuffle=(self.train_sampler is None),
-                                   num_workers=config.workers,
-                                   pin_memory=True,
-                                   persistent_workers=True,
-                                #    prefetch_factor=2,
+                                   num_workers=config.num_workers,
+                                   pin_memory=(config.num_workers > 0),
+                                   persistent_workers=(config.num_workers > 0),
                                    sampler=self.train_sampler)
 
         elif mode == 'online_eval':
@@ -277,6 +274,7 @@ class DataLoadPreprocess(Dataset):
             with open(config.filenames_file, 'r') as f:
                 self.filenames = f.readlines()
 
+        self.filenames = self.filenames[:100] if config.get("debug", False) else self.filenames
         self.mode = mode
         self.transform = transform
         self.to_tensor = ToTensor(mode)
