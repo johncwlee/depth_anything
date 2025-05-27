@@ -120,6 +120,8 @@ if __name__ == '__main__':
                         help="Batch size (default: 16)")
     parser.add_argument("--save_dir", type=str, default="./results")
     parser.add_argument("--experiment_name", type=str)
+    parser.add_argument("--seed", type=int, default=43,
+                        help="Random seed for reproducibility")
 
     args, unknown_args = parser.parse_known_args()
     overwrite_kwargs = parse_unknown(unknown_args)
@@ -134,6 +136,7 @@ if __name__ == '__main__':
     config = get_config(args.model, "train", args.dataset, **overwrite_kwargs)
     config.name = args.experiment_name
     config.save_dir = args.save_dir
+    config.seed = args.seed
 
     if config.use_shared_dict:
         shared_dict = mp.Manager().dict()
