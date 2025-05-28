@@ -135,7 +135,7 @@ if __name__ == '__main__':
 
     config = get_config(args.model, "train", args.dataset, **overwrite_kwargs)
     config.name = args.experiment_name
-    config.save_dir = args.save_dir
+    config.root = config.save_dir = args.save_dir
     config.seed = args.seed
 
     if config.use_shared_dict:
