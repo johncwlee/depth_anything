@@ -94,6 +94,26 @@ DATASETS_CONFIG = {
         "eigen_crop": False,
         "use_right": False
     },
+    "allo": {
+        "dataset": "allo",
+        "min_depth": 1e-5,
+        "max_depth": 100,
+        "data_path": os.path.join(HOME_DIR, "allo_monodepth/train"),
+        "input_height": 720,
+        "input_width": 1280,  # 704
+        "data_path_eval": os.path.join(HOME_DIR, "allo_monodepth/val"),
+
+        "min_depth_eval": 1e-5,
+        "max_depth_eval": 100,
+
+        "do_random_rotate": True,
+        "degree": 10.0,
+        "do_kb_crop": False,
+        "garg_crop": False,
+        "eigen_crop": False,
+        "mean": [0.2083, 0.2124, 0.2146],
+        "std": [0.2669, 0.2700, 0.2711],
+    },
     "nyu": {
         "dataset": "nyu",
         "avoid_boundary": False,
@@ -376,7 +396,7 @@ def get_config(model_name, mode='train', dataset=None, **overwrite_kwargs):
     check_choices("Model", model_name, ["zoedepth", "zoedepth_nk"])
     check_choices("Mode", mode, ["train", "infer", "eval"])
     if mode == "train":
-        check_choices("Dataset", dataset, ["nyu", "kitti", "mix", None])
+        check_choices("Dataset", dataset, ["nyu", "kitti", "allo", "mix", None])
 
     config = flatten({**COMMON_CONFIG, **COMMON_TRAINING_CONFIG})
     config = update_model_config(config, mode, model_name)
