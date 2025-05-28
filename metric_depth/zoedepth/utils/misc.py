@@ -66,6 +66,7 @@ def denormalize(x):
     Returns:
         torch.Tensor - shape(N,3,H,W): Denormalized input
     """
+    breakpoint()
     mean = torch.Tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(x.device)
     std = torch.Tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(x.device)
     return x * std + mean
@@ -239,8 +240,8 @@ def compute_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=True
             else:
                 # assert gt_depth.shape == (480, 640), "Error: Eigen crop is currently only valid for (480, 640) images"
                 eval_mask[45:471, 41:601] = 1
-        else:
-            eval_mask = np.ones(valid_mask.shape)
+    else:
+        eval_mask = np.ones(valid_mask.shape)
     valid_mask = np.logical_and(valid_mask, eval_mask)
     return compute_errors(gt_depth[valid_mask], pred[valid_mask])
 

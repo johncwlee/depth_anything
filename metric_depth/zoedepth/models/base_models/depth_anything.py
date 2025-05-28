@@ -38,6 +38,7 @@ def denormalize(x):
     Returns:
         torch.Tensor - shape(N,3,H,W): Denormalized input
     """
+    breakpoint()
     mean = torch.Tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(x.device)
     std = torch.Tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(x.device)
     return x * std + mean
@@ -174,14 +175,19 @@ class Resize(object):
         return nn.functional.interpolate(x, (height, width), mode='bilinear', align_corners=True)
 
 class PrepForMidas(object):
-    def __init__(self, resize_mode="minimal", keep_aspect_ratio=True, img_size=384, do_resize=True):
+    def __init__(self, 
+                 resize_mode="minimal", 
+                 keep_aspect_ratio=True, 
+                 img_size=384, 
+                 do_resize=True,
+                 mean=[0.485, 0.456, 0.406],
+                 std=[0.229, 0.224, 0.225]
+                 ):
         if isinstance(img_size, int):
             img_size = (img_size, img_size)
         net_h, net_w = img_size
-        # self.normalization = Normalize(
-        #     mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
         self.normalization = Normalize(
-            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            mean=mean, std=std)
         self.resizer = Resize(net_w, net_h, keep_aspect_ratio=keep_aspect_ratio, ensure_multiple_of=14, resize_method=resize_mode) \
             if do_resize else nn.Identity()
 
@@ -218,7 +224,10 @@ class DepthAnythingCore(nn.Module):
         self.set_fetch_features(fetch_features)
 
         self.prep = PrepForMidas(keep_aspect_ratio=keep_aspect_ratio,
-                                 img_size=img_size, do_resize=kwargs.get('do_resize', True))
+                                 img_size=img_size, 
+                                 do_resize=kwargs.get('do_resize', True),
+                                 mean=kwargs.get('mean', [0.485, 0.456, 0.406]),
+                                 std=kwargs.get('std', [0.229, 0.224, 0.225]))
 
         if freeze_bn:
             self.freeze_bn()
@@ -331,15 +340,23 @@ class DepthAnythingCore(nn.Module):
         self.output_channels = [256, 256, 256, 256, 256]
 
     @staticmethod
-    def build(midas_model_type="dinov2_large", train_midas=False, use_pretrained_midas=True, fetch_features=False, freeze_bn=True, force_keep_ar=False, force_reload=False, **kwargs):
+    def build(midas_model_type="dinov2_large", 
+              train_midas=False, 
+              use_pretrained_midas=True, 
+              fetch_features=False, 
+              freeze_bn=True, 
+              force_keep_ar=False, 
+              force_reload=False, 
+              **kwargs):
         if "img_size" in kwargs:
             kwargs = DepthAnythingCore.parse_img_size(kwargs)
         img_size = kwargs.pop("img_size", [384, 384])
         
         depth_anything = DPT_DINOv2(out_channels=[256, 512, 1024, 1024], use_clstoken=False)
         
-        state_dict = torch.load('../../../misc/depth_anything/depth_anything_vitl14_kitti.pth', map_location='cpu')
-        depth_anything.load_state_dict(state_dict)
+        # state_dict = torch.load('../../../misc/depth_anything/depth_anything_vitl14_pretrain.pth', map_location='cpu')
+        state_dict = torch.load('../../../misc/depth_anything/depth_anything_v2_vitl_pretrain.pth', map_location='cpu')
+        depth_anything.load_state_dict(state_dict, strict=True)
         
         kwargs.update({'keep_aspect_ratio': force_keep_ar})
         
