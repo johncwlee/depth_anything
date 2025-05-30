@@ -140,18 +140,11 @@ class ZoeDepth(DepthModel):
                 - probs (torch.Tensor): Output probability distribution of shape (B, n_bins, H, W). Present only if return_probs is True
 
         """
-        # print('input shape', x.shape)
         
         b, c, h, w = x.shape
-        # print("input shape:", x.shape)
         self.orig_input_width = w
         self.orig_input_height = h
         rel_depth, out = self.core(x, denorm=denorm, return_rel_depth=True)
-        # print("output shapes", rel_depth.shape, out.shape)
-        # print('rel_depth shape:', rel_depth.shape)
-        # print('out type:', type(out))
-        # for k in range(len(out)):
-        #     print(k, out[k].shape)
         
         outconv_activation = out[0]
         btlnck = out[1]

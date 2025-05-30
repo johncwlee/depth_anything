@@ -133,6 +133,7 @@ if __name__ == '__main__':
     if args.trainer is not None:
         overwrite_kwargs["trainer"] = args.trainer
 
+    overwrite_kwargs["config_version"] = "allo" if args.dataset == "allo" else None
     config = get_config(args.model, "train", args.dataset, **overwrite_kwargs)
     config.name = args.experiment_name
     config.root = config.save_dir = args.save_dir
