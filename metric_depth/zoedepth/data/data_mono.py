@@ -587,8 +587,11 @@ class ToTensor(object):
 class ALLODataLoadPreprocess(Dataset):
     def __init__(self, config, mode, transform=None, is_for_online_eval=False, **kwargs):
         self.config = config
-        
-        root = Path(config.data_path)
+        if mode == 'train':
+            root = Path(config.data_path)
+        elif mode == 'online_eval':
+            root = Path(config.data_path_eval)
+
         columns = ['image_path', 'gt_depth_path']
         self.samples = DataFrame([{"image_path": str(frame),
                                 "gt_depth_path": str(frame).replace('images', 'depth')}
@@ -648,6 +651,8 @@ class ALLODataLoadPreprocess(Dataset):
         mask = np.logical_and(depth_gt > self.config.min_depth,
                                 depth_gt < self.config.max_depth).squeeze()[None, ...]
         sample = {'image': image, 'depth': depth_gt, 'mask': mask, **sample}
+        if mask.sum() == 0:
+            sample['has_valid_depth'] = False
 
         if self.transform:
             sample = self.transform(sample)
