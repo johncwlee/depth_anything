@@ -1,0 +1,11 @@
+matplotlib
+opencv-python-headless
+open3d
+open3d-python
+gradio_imageslider
+gradio==4.29.0
+easydict
+einops
+h5py
+xformers==0.0.29
+wandb
