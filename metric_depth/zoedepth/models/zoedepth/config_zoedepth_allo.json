@@ -16,7 +16,7 @@
         "output_distribution": "logbinomial",
         "memory_efficient": true,
         "inverse_midas": false,
-        "img_size": [518, 924],
+        "img_size": [714, 1274],
         "force_keep_ar": true
     },
     
