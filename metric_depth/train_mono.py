@@ -120,6 +120,7 @@ if __name__ == '__main__':
                         help="Batch size (default: 16)")
     parser.add_argument("--save_dir", type=str, default="./results")
     parser.add_argument("--experiment_name", type=str)
+    parser.add_argument("--project", type=str, default="Depth-Anything")
     parser.add_argument("--seed", type=int, default=43,
                         help="Random seed for reproducibility")
 
@@ -133,8 +134,14 @@ if __name__ == '__main__':
     if args.trainer is not None:
         overwrite_kwargs["trainer"] = args.trainer
 
-    overwrite_kwargs["config_version"] = "allo" if args.dataset == "allo" else None
+    if args.dataset == "allo":
+        overwrite_kwargs["config_version"] = "allo"
+    elif args.dataset == "STU-Mix":
+        overwrite_kwargs["config_version"] = "stu"
+    else:
+        overwrite_kwargs["config_version"] = None
     config = get_config(args.model, "train", args.dataset, **overwrite_kwargs)
+    config.project = args.project
     config.name = args.experiment_name
     config.root = config.save_dir = args.save_dir
     config.seed = args.seed
