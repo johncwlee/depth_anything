@@ -48,6 +48,8 @@ from .vkitti2 import get_vkitti2_loader
 
 from .preprocess import CropParams, get_white_border, get_black_border
 
+os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
+
 
 def _is_pil_image(img):
     return isinstance(img, Image.Image)
@@ -92,6 +94,15 @@ def preprocessing_transforms(mode, **kwargs):
     return transforms.Compose([
         ToTensor(mode=mode, **kwargs)
     ])
+
+
+def read_exr_depth_as_pil(path):
+    arr = cv2.imread(path, cv2.IMREAD_UNCHANGED)  # float32 if EXR
+    if arr is None:
+        raise ValueError("Failed to read EXR. Your OpenCV build may lack OpenEXR support.")
+    if arr.ndim == 3:
+        arr = arr[..., 0]  # pick first channel if needed
+    return Image.fromarray(arr.astype(np.float32), mode='F')
 
 
 class DepthDataLoader(object):
@@ -590,8 +601,8 @@ class ALLODataLoadPreprocess(Dataset):
 
         columns = ['image_path', 'gt_depth_path']
         self.samples = DataFrame([{"image_path": str(frame),
-                                "gt_depth_path": str(frame).replace('images', 'depth')}
-                        for frame in root.glob('**/images/*.png')],
+                                "gt_depth_path": str(frame).replace('images', 'depth').replace('.png', '.exr')}
+                        for frame in root.glob('**/images/*normal.png')],
                         columns=columns)
         self.samples = self.samples.sample(n=100, random_state=42) if config.get("debug", False) else self.samples
 
@@ -614,7 +625,8 @@ class ALLODataLoadPreprocess(Dataset):
         sample = {"image_path": image_path, "depth_path": depth_path, "has_valid_depth": True,
                   "focal": 1.0} #* focal is not used in ALLO dataset, so we set it to 1.0 as a placeholder
         image = self.reader.open(image_path)
-        depth_gt = self.reader.open(depth_path)
+        depth_gt = read_exr_depth_as_pil(depth_path)    #* read exr file
+        seg_gt = self.reader.open(image_path.replace('images', 'segmentation_masks'))
 
         if self.mode == 'train':
             if self.config.do_random_rotate and (self.config.aug):
@@ -622,29 +634,29 @@ class ALLODataLoadPreprocess(Dataset):
                 image = self.rotate_image(image, random_angle)
                 depth_gt = self.rotate_image(
                     depth_gt, random_angle, flag=Image.NEAREST)
+                seg_gt = self.rotate_image(seg_gt, random_angle, flag=Image.NEAREST)
 
             image = np.asarray(image, dtype=np.float32) / 255.0
-            depth_gt = np.asarray(depth_gt, dtype=np.float32)
+            depth_gt = np.asarray(depth_gt, dtype=np.float32, copy=True)
+            #* set depth to 0 if segmentation mask is 0 (background)
+            seg_gt = np.asarray(seg_gt)
+            depth_gt[seg_gt == 0] = 0
             depth_gt = np.expand_dims(depth_gt, axis=2)
-            #TODO: Check if this is correct
-            depth_gt = depth_gt / 1000.0
 
             if self.config.aug and (self.config.random_crop):
                 image, depth_gt = self.random_crop(
                     image, depth_gt, self.config.input_height, self.config.input_width)
-            
-            if self.config.aug and self.config.random_translate:
-                image, depth_gt = self.random_translate(image, depth_gt, self.config.max_translation)
 
             image, depth_gt = self.train_preprocess(image, depth_gt)
 
         else:
             if self.mode == 'online_eval':
                 image = np.asarray(image, dtype=np.float32) / 255.0
-                depth_gt = np.asarray(depth_gt, dtype=np.float32)
+                depth_gt = np.asarray(depth_gt, dtype=np.float32, copy=True)
+                #* set depth to 0 if segmentation mask is 0 (background)
+                seg_gt = np.asarray(seg_gt)
+                depth_gt[seg_gt == 0] = 0
                 depth_gt = np.expand_dims(depth_gt, axis=2)
-                #TODO: Check if this is correct
-                depth_gt = depth_gt / 1000.0
 
         mask = np.logical_and(depth_gt > self.config.min_depth,
                                 depth_gt < self.config.max_depth).squeeze()[None, ...]

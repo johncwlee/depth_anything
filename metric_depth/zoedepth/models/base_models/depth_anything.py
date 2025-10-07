@@ -38,7 +38,6 @@ def denormalize(x):
     Returns:
         torch.Tensor - shape(N,3,H,W): Denormalized input
     """
-    breakpoint()
     mean = torch.Tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(x.device)
     std = torch.Tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(x.device)
     return x * std + mean
@@ -364,6 +363,9 @@ class DepthAnythingCore(nn.Module):
                                freeze_bn=freeze_bn, img_size=img_size, **kwargs)
         
         depth_anything_core.set_output_channels()
+        
+        # state_dict = torch.load('../../../misc/depth_anything/depth_anything_v2_metric_vkitti_vitl.pth', map_location='cpu')
+        # depth_anything_core.core.load_state_dict(state_dict, strict=True)
         return depth_anything_core
 
     @staticmethod

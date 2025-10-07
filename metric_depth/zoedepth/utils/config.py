@@ -96,14 +96,14 @@ DATASETS_CONFIG = {
     },
     "allo": {
         "dataset": "allo",
-        "min_depth": 1e-5,
+        "min_depth": 0.001,
         "max_depth": 100,
-        "data_path": os.path.join(HOME_DIR, "allo_monodepth/train"),
+        "data_path": os.path.join(HOME_DIR, "allo_3d/train"),
         "input_height": 720,
         "input_width": 1280,  # 704
-        "data_path_eval": os.path.join(HOME_DIR, "allo_monodepth/val"),
+        "data_path_eval": os.path.join(HOME_DIR, "allo_3d/test"),
 
-        "min_depth_eval": 1e-5,
+        "min_depth_eval": 0.001,
         "max_depth_eval": 100,
 
         "do_random_rotate": True,
