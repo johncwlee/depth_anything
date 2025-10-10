@@ -32,6 +32,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from pandas import DataFrame
+os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 import cv2
 import torch
 import torch.nn as nn
@@ -48,7 +49,7 @@ from .vkitti2 import get_vkitti2_loader
 
 from .preprocess import CropParams, get_white_border, get_black_border
 
-os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
+
 
 
 def _is_pil_image(img):
@@ -637,7 +638,7 @@ class ALLODataLoadPreprocess(Dataset):
                 seg_gt = self.rotate_image(seg_gt, random_angle, flag=Image.NEAREST)
 
             image = np.asarray(image, dtype=np.float32) / 255.0
-            depth_gt = np.asarray(depth_gt, dtype=np.float32, copy=True)
+            depth_gt = np.array(depth_gt, dtype=np.float32)
             #* set depth to 0 if segmentation mask is 0 (background)
             seg_gt = np.asarray(seg_gt)
             depth_gt[seg_gt == 0] = 0
@@ -652,7 +653,7 @@ class ALLODataLoadPreprocess(Dataset):
         else:
             if self.mode == 'online_eval':
                 image = np.asarray(image, dtype=np.float32) / 255.0
-                depth_gt = np.asarray(depth_gt, dtype=np.float32, copy=True)
+                depth_gt = np.array(depth_gt, dtype=np.float32)
                 #* set depth to 100 if segmentation mask is 0 (background)
                 seg_gt = np.asarray(seg_gt)
                 depth_gt[seg_gt == 0] = 100
