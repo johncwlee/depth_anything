@@ -653,9 +653,9 @@ class ALLODataLoadPreprocess(Dataset):
             if self.mode == 'online_eval':
                 image = np.asarray(image, dtype=np.float32) / 255.0
                 depth_gt = np.asarray(depth_gt, dtype=np.float32, copy=True)
-                #* set depth to 0 if segmentation mask is 0 (background)
+                #* set depth to 100 if segmentation mask is 0 (background)
                 seg_gt = np.asarray(seg_gt)
-                depth_gt[seg_gt == 0] = 0
+                depth_gt[seg_gt == 0] = 100
                 depth_gt = np.expand_dims(depth_gt, axis=2)
 
         mask = np.logical_and(depth_gt > self.config.min_depth,
