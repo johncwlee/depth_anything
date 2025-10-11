@@ -94,6 +94,25 @@ DATASETS_CONFIG = {
         "eigen_crop": False,
         "use_right": False
     },
+    #* SemanticKITTI: prediction-only for occupancy prediction training
+    "semantickitti": {
+        "dataset": "semantickitti",
+        "min_depth": 0.001,
+        "max_depth": 80,
+        "input_height": 384,    #* placeholder, not used; raw image size is used
+        "input_width": 1280,    #* placeholder, not used; raw image size is used
+        "semantickitti_data_path": os.path.join(HOME_DIR, "semantickitti"),
+
+        "min_depth_eval": 1e-3,
+        "max_depth_eval": 80,
+
+        "do_random_rotate": False,
+        "degree": 1.0,
+        "do_kb_crop": False,
+        "garg_crop": False,
+        "eigen_crop": False,
+        "use_right": False
+    },
     "allo": {
         "dataset": "allo",
         "min_depth": 0.001,
