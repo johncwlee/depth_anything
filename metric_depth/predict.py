@@ -94,7 +94,7 @@ def predict(model, test_loader, config, round_vals=True, round_precision=3):
         pred_out[np.isnan(pred_out)] = config.min_depth_eval
 
         #? Save depth
-        if config.save_dir is not None:
+        if config.save_images and config.save_dir is not None:
             if sample['dataset'][0] == "semantickitti":
                 sequence_id = sample['image_path'][0].split('/')[-3]
                 frame_id = sample['image_path'][0].split('/')[-1].split('.')[0]
@@ -127,18 +127,20 @@ def main(config):
 def predict_model(model_name, pretrained_resource, dataset='semantickitti', save_dir='./results', **kwargs):
 
     # Load default pretrained resource defined in config if not set
-    overwrite = {**kwargs, "pretrained_resource": pretrained_resource} if pretrained_resource else kwargs
-    config = get_config(model_name, "eval", dataset, **overwrite)
-    config.save_dir = save_dir
-    
+    overwrite_kwargs = {**kwargs, "pretrained_resource": pretrained_resource} if pretrained_resource else kwargs
     if dataset == "allo":
         overwrite_kwargs["config_version"] = "allo"
-    elif dataset == "STU-Mix":
+    elif dataset == "STU":
         overwrite_kwargs["config_version"] = "stu"
+    elif dataset == "STU-Mix":
+        overwrite_kwargs["config_version"] = "stu-mix"
     elif dataset == "semantickitti":
         overwrite_kwargs["config_version"] = "semantickitti"
     else:
         overwrite_kwargs["config_version"] = None
+    
+    config = get_config(model_name, "eval", dataset, **overwrite_kwargs)
+    config.save_dir = save_dir
     
     pprint(config)
     print(f"Evaluating and saving predictions of {model_name} on {dataset}...")
@@ -155,9 +157,10 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--dataset", type=str, required=True,
                         default='kitti', help="Dataset to evaluate on")
     parser.add_argument("--save_dir", type=str, default="./results")
+    parser.add_argument("--save_images", type=bool, default=False)
 
     args, unknown_args = parser.parse_known_args()
     overwrite_kwargs = parse_unknown(unknown_args)
 
     predict_model(args.model, pretrained_resource=args.pretrained_resource,
-                dataset=args.dataset, save_dir=args.save_dir, **overwrite_kwargs)
+                dataset=args.dataset, save_dir=args.save_dir, save_images=args.save_images, **overwrite_kwargs)

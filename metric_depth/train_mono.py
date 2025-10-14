@@ -123,6 +123,8 @@ if __name__ == '__main__':
     parser.add_argument("--project", type=str, default="Depth-Anything")
     parser.add_argument("--seed", type=int, default=43,
                         help="Random seed for reproducibility")
+    parser.add_argument("--load_from", type=str, default=None,
+                        help="Load from a specific checkpoint")
 
     args, unknown_args = parser.parse_known_args()
     overwrite_kwargs = parse_unknown(unknown_args)
@@ -145,6 +147,7 @@ if __name__ == '__main__':
     config.name = args.experiment_name
     config.root = config.save_dir = args.save_dir
     config.seed = args.seed
+    config.checkpoint = args.load_from
 
     if config.use_shared_dict:
         shared_dict = mp.Manager().dict()

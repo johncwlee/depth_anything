@@ -141,6 +141,8 @@ class DepthDataLoader(object):
 
         if config.dataset == 'allo':
             dataset = ALLODataLoadPreprocess
+        elif config.dataset == 'stu':
+            dataset = STUDataLoadPreprocess
         elif config.dataset == 'STU-Mix':
             dataset = STUMixDataLoadPreprocess
         elif config.dataset == 'semantickitti':
@@ -1336,3 +1338,240 @@ class SemanticKITTIDataLoadPreprocess(Dataset):
         sample = self.postprocess(sample)   #* doesn't do anything
         sample['dataset'] = self.config.dataset
         return sample
+
+
+class STUDataLoadPreprocess(Dataset):
+    def __init__(self, config, mode, transform=None, is_for_online_eval=False, **kwargs):
+        self.config = config
+        columns = ['image_path', 'lidar_path', 'dataset', 'sequence']
+        
+        if mode == 'train':
+            roots = [Path(config.STU_data_path) / "train"]
+        elif mode == 'online_eval': #* val
+            roots = [Path(config.STU_data_path) / "val"]
+        else: #* test or infer
+            roots = [Path(config.STU_data_path) / "train",
+                     Path(config.STU_data_path) / "val"]
+
+        samples = []
+        for root in roots:
+            samples.append(DataFrame([{"image_path": str(frame),
+                                "lidar_path": (str(frame)
+                                            .replace('port_a_cam_0', 'velodyne')
+                                            .replace('.png', '.bin')),
+                                "dataset": "STU"}
+                        for frame in root.glob('**/port_a_cam_0/*.png')],
+                        columns=columns))
+        self.samples = pd.concat(samples)
+        self.samples = self.samples.sample(n=100, random_state=42) if config.get("debug", False) else self.samples
+
+        self.mode = mode
+        self.transform = transform
+        self.to_tensor = ToTensor(mode)
+        self.is_for_online_eval = is_for_online_eval
+        if config.use_shared_dict:
+            self.reader = CachedReader(config.shared_dict)
+        else:
+            self.reader = ImReader()
+
+    def postprocess(self, sample):
+        return sample
+
+    def __len__(self):
+        return len(self.samples)
+
+    @staticmethod
+    def get_calib_STU():
+        calib_out = {}
+        calib_out["P2"] = torch.eye(4)  # 4x4 matrix
+        #* P matrix for both intrinsic and distortion (K, D)
+        calib_out["P2"][:3, :4] = torch.tensor(
+            [[1678.93384, 0.0, 918.44184, 0.0],
+            [0.0, 1779.26013, 644.71356, 0.0],
+            [0.0, 0.0, 1.0, 0.0]]
+        )
+        calib_out["Tr"] = torch.eye(4)  # 4x4 matrix
+        #* LiDAR -> Camera
+        calib_out["Tr"][:3, :4] = torch.tensor(
+            [[0.014493257457, -0.999718233867, -0.018798892575, -0.006080995796],
+            [0.010622477153, 0.018953749566, -0.999763931314, -0.400777062539],
+            [0.999838541199, 0.014290145246, 0.010894185671, -0.761577584775]]
+        )
+        
+        return calib_out
+
+
+    @staticmethod
+    def project_points(points, rots, trans, intrins):
+        # from lidar to camera
+        points = points.view(-1, 1, 3) # N, 1, 3
+        points = points - trans.view(1, -1, 3) # N, b, 3
+        inv_rots = rots.inverse().unsqueeze(0) # 1, b, 3, 3
+        points = (inv_rots @ points.unsqueeze(-1)) # N, b, 3, 1
+        # the intrinsic matrix is [4, 4] for kitti and [3, 3] for nuscenes 
+        if intrins.shape[-1] == 4:
+            points = torch.cat((points, torch.ones((points.shape[0], points.shape[1], 1, 1))), dim=2) # N, b, 4, 1
+            points = (intrins.unsqueeze(0) @ points).squeeze(-1) # N, b, 4
+        else:
+            points = (intrins.unsqueeze(0) @ points).squeeze(-1)
+
+        points_d = points[..., 2:3] # N, b, 1
+        points_uv = points[..., :2] / points_d # N, b, 2
+        points_uvd = torch.cat((points_uv, points_d), dim=2)
+        
+        return points_uvd
+
+
+    def get_depth_from_lidar(self, image, lidar_points, intrins, rots, trans):
+        projected_points = self.project_points(lidar_points, rots, trans, intrins)
+        
+        img_h, img_w = image.height, image.width
+        valid_mask = (projected_points[..., 0] >= 0) & \
+                    (projected_points[..., 1] >= 0) & \
+                    (projected_points[..., 0] <= img_w - 1) & \
+                    (projected_points[..., 1] <= img_h - 1) & \
+                    (projected_points[..., 2] > 0)
+        
+        #? Get depth from LiDAR points
+        gt_depth = torch.zeros((img_h, img_w))
+        projected_points = projected_points[:, 0]
+        valid_mask = valid_mask[:, 0]
+        valid_points = projected_points[valid_mask]
+        # sort
+        depth_order = torch.argsort(valid_points[:, 2], descending=True)
+        valid_points = valid_points[depth_order]
+        # fill in
+        gt_depth[valid_points[:, 1].round().long(), 
+                valid_points[:, 0].round().long()] = valid_points[:, 2].float()
+        
+        #? Convert back to PIL image
+        gt_depth = gt_depth.numpy()
+        depth_gt = Image.fromarray(gt_depth)
+        
+        return depth_gt
+
+
+    def __getitem__(self, idx):
+        image_path = self.samples.iloc[idx].image_path
+        lidar_path = self.samples.iloc[idx].lidar_path
+        
+        sample = {"image_path": image_path, "has_valid_depth": True, "focal": 1.0} #* focal is not used in ALLO dataset, so we set it to 1.0 as a placeholder
+        image = self.reader.open(image_path)
+        lidar_points = np.fromfile(lidar_path, dtype=np.float32).reshape(-1, 4)
+        lidar_points = torch.from_numpy(lidar_points[:, :3]).float()
+        
+        #? Get calibration info
+        calib = self.get_calib_STU()
+        intrins = calib["P2"].unsqueeze(0)
+        lidar2cam = calib["Tr"].unsqueeze(0)
+        cam2lidar = lidar2cam.inverse()
+        rots = cam2lidar[:, :3, :3]
+        trans = cam2lidar[:, :3, 3]
+        
+        depth_gt = self.get_depth_from_lidar(image, lidar_points, intrins, rots, trans)
+
+        if self.mode == 'train':
+            if self.config.do_random_rotate and (self.config.aug):
+                random_angle = (random.random() - 0.5) * 2 * self.config.degree
+                image = self.rotate_image(image, random_angle)
+                depth_gt = self.rotate_image(
+                    depth_gt, random_angle, flag=Image.NEAREST)
+
+            image = np.asarray(image, dtype=np.float32) / 255.0
+            depth_gt = np.asarray(depth_gt, dtype=np.float32)
+            depth_gt = np.expand_dims(depth_gt, axis=2)
+            
+            image, depth_gt = self.train_preprocess(image, depth_gt)
+
+        else:
+            if self.mode == 'online_eval':
+                image = np.asarray(image, dtype=np.float32) / 255.0
+                depth_gt = np.asarray(depth_gt, dtype=np.float32)
+                depth_gt = np.expand_dims(depth_gt, axis=2) #* (H, W, 1)
+
+        mask = np.logical_and(depth_gt > self.config.min_depth,
+                                depth_gt < self.config.max_depth).squeeze()[None, ...]
+        sample = {'image': image, 'depth': depth_gt, 'mask': mask, **sample}
+        if mask.sum() == 0:
+            sample['has_valid_depth'] = False
+
+        if self.transform:
+            sample = self.transform(sample)
+
+        sample = self.postprocess(sample)   #* doesn't do anything
+        sample['dataset'] = self.config.dataset
+        return sample
+
+    def rotate_image(self, image, angle, flag=Image.BILINEAR):
+        result = image.rotate(angle, resample=flag)
+        return result
+
+    def resize_pad_image(self, image, height, width):
+        image = image.resize((width, height), Image.BICUBIC)
+        
+        return image
+
+    def random_crop(self, img, depth, height, width):
+        assert img.shape[0] >= height
+        assert img.shape[1] >= width
+        assert img.shape[0] == depth.shape[0]
+        assert img.shape[1] == depth.shape[1]
+        x = random.randint(0, img.shape[1] - width)
+        y = random.randint(0, img.shape[0] - height)
+        img = img[y:y + height, x:x + width, :]
+        depth = depth[y:y + height, x:x + width, :]
+
+        return img, depth
+    
+    def random_translate(self, img, depth, max_t=20):
+        assert img.shape[0] == depth.shape[0]
+        assert img.shape[1] == depth.shape[1]
+        p = self.config.translate_prob
+        do_translate = random.random()
+        if do_translate > p:
+            return img, depth
+        x = random.randint(-max_t, max_t)
+        y = random.randint(-max_t, max_t)
+        M = np.float32([[1, 0, x], [0, 1, y]])
+        # print(img.shape, depth.shape)
+        img = cv2.warpAffine(img, M, (img.shape[1], img.shape[0]))
+        depth = cv2.warpAffine(depth, M, (depth.shape[1], depth.shape[0]))
+        depth = depth.squeeze()[..., None]  # add channel dim back. Affine warp removes it
+        # print("after", img.shape, depth.shape)
+        return img, depth
+
+    def train_preprocess(self, image, depth_gt):
+        if self.config.aug:
+            # Random flipping
+            do_flip = random.random()
+            if do_flip > 0.5:
+                image = (image[:, ::-1, :]).copy()
+                depth_gt = (depth_gt[:, ::-1, :]).copy()
+
+            # Random gamma, brightness, color augmentation
+            do_augment = random.random()
+            if do_augment > 0.5:
+                image = self.augment_image(image)
+
+        return image, depth_gt
+
+    def augment_image(self, image):
+        # gamma augmentation
+        gamma = random.uniform(0.9, 1.1)
+        image_aug = image ** gamma
+
+        # brightness augmentation
+        if self.config.dataset == 'nyu':
+            brightness = random.uniform(0.75, 1.25)
+        else:
+            brightness = random.uniform(0.9, 1.1)
+        image_aug = image_aug * brightness
+
+        # color augmentation
+        colors = np.random.uniform(0.9, 1.1, size=3)
+        white = np.ones((image.shape[0], image.shape[1]))
+        color_image = np.stack([white * colors[i] for i in range(3)], axis=2)
+        image_aug *= color_image
+        image_aug = np.clip(image_aug, 0, 1)
+
+        return image_aug
