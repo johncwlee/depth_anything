@@ -138,8 +138,10 @@ if __name__ == '__main__':
 
     if args.dataset == "allo":
         overwrite_kwargs["config_version"] = "allo"
-    elif args.dataset == "STU-Mix":
+    elif args.dataset == "stu":
         overwrite_kwargs["config_version"] = "stu"
+    elif args.dataset == "STU-Mix":
+        overwrite_kwargs["config_version"] = "stu-mix"
     else:
         overwrite_kwargs["config_version"] = None
     config = get_config(args.model, "train", args.dataset, **overwrite_kwargs)
