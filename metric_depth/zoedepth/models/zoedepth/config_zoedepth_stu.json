@@ -16,7 +16,7 @@
         "output_distribution": "logbinomial",
         "memory_efficient": true,
         "inverse_midas": false,
-        "img_size": [448, 720]
+        "img_size": [392, 518]
     },
     
     "train": {
@@ -34,13 +34,13 @@
         "w_grad": 0,
         "avoid_boundary": false,
         "random_crop": false,
-        "input_width": 720,
-        "input_height": 448,
+        "input_width": 518,
+        "input_height": 392,
         "midas_lr_factor": 50,
         "encoder_lr_factor": 50,
         "pos_enc_lr_factor": 50,
-        "freeze_midas_bn": true
-
+        "freeze_midas_bn": true,
+        "clip_grad": 1.0
     },
 
     "infer":{
