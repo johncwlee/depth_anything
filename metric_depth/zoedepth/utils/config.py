@@ -108,7 +108,7 @@ DATASETS_CONFIG = {
 
         "do_random_rotate": False,
         "degree": 1.0,
-        "do_kb_crop": False,
+        "do_kb_crop": True,
         "garg_crop": False,
         "eigen_crop": False,
         "use_right": False
@@ -144,10 +144,10 @@ DATASETS_CONFIG = {
         "min_depth_eval": 1e-3,
         "max_depth_eval": 80,
 
-        "do_random_rotate": True,
+        "do_random_rotate": False,
         "degree": 1.0,
-        "do_kb_crop": True,
-        "garg_crop": True,
+        "do_kb_crop": False,
+        "garg_crop": False,
         "eigen_crop": False,
         "use_right": False
     },
@@ -341,7 +341,7 @@ def get_config(model_name, mode='train', dataset=None, **overwrite_kwargs):
     check_choices("Model", model_name, ["zoedepth", "zoedepth_nk"])
     check_choices("Mode", mode, ["train", "infer", "eval"])
     if mode == "train":
-        check_choices("Dataset", dataset, ["kitti", "allo", "mix", "stu", "STU-Mix", None])
+        check_choices("Dataset", dataset, ["kitti", "allo", "mix", "semantickitti","stu", "STU-Mix", None])
 
     config = flatten({**COMMON_CONFIG, **COMMON_TRAINING_CONFIG})
     config = update_model_config(config, mode, model_name)
