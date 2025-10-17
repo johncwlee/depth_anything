@@ -62,9 +62,9 @@ def load_ckpt(config, model, checkpoint_dir="./checkpoints", ckpt_type="best"):
 
     from zoedepth.models.model_io import load_wts
 
-    if hasattr(config, "checkpoint"):
+    if hasattr(config, "checkpoint") and config.checkpoint is not None:
         checkpoint = config.checkpoint
-    elif hasattr(config, "ckpt_pattern"):
+    elif hasattr(config, "ckpt_pattern") and config.ckpt_pattern is not None:
         pattern = config.ckpt_pattern
         matches = glob.glob(os.path.join(
             checkpoint_dir, f"*{pattern}*{ckpt_type}*"))

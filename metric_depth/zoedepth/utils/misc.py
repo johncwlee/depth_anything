@@ -213,6 +213,7 @@ def compute_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=True
     if gt.shape[-2:] != pred.shape[-2:] and interpolate:
         pred = nn.functional.interpolate(
             pred, gt.shape[-2:], mode='bilinear', align_corners=True)
+        intr_pred = pred
 
     pred = pred.squeeze().cpu().numpy()
     pred[pred < min_depth_eval] = min_depth_eval
@@ -234,7 +235,7 @@ def compute_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=True
 
         elif eigen_crop:
             # print("-"*10, " EIGEN CROP ", "-"*10)
-            if dataset == 'kitti':
+            if dataset in ['kitti', "semantickitti", 'stu']:
                 eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height),
                           int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
             else:
@@ -243,6 +244,10 @@ def compute_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=True
     else:
         eval_mask = np.ones(valid_mask.shape)
     valid_mask = np.logical_and(valid_mask, eval_mask)
+    
+    return_interpolated = kwargs.get("return_interpolated", False)
+    if return_interpolated:
+        return compute_errors(gt_depth[valid_mask], pred[valid_mask]), intr_pred
     return compute_errors(gt_depth[valid_mask], pred[valid_mask])
 
 

@@ -166,7 +166,7 @@ class Trainer(BaseTrainer):
             l_depth = self.silog_loss(
                 pred_depths, depths_gt, mask=mask.to(torch.bool), interpolate=True)
 
-        metrics = compute_metrics(depths_gt, pred_depths, **self.config)
+        metrics, pred_depths = compute_metrics(depths_gt, pred_depths, **self.config, return_interpolated=True)
         losses = {f"{self.silog_loss.name}": l_depth.item()}
 
         if val_step == 1 and self.should_log:
