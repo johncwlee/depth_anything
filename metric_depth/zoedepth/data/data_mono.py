@@ -600,15 +600,20 @@ class ALLODataLoadPreprocess(Dataset):
     def __init__(self, config, mode, transform=None, is_for_online_eval=False, **kwargs):
         self.config = config
         if mode == 'train':
-            root = Path(config.data_path)
+            roots = [Path(config.data_path)]
         elif mode == 'online_eval':
-            root = Path(config.data_path_eval)
+            roots = [Path(config.data_path_eval)]
+        if config.test_all:
+            roots = [Path(config.data_path), Path(config.data_path_eval)]
 
         columns = ['image_path', 'gt_depth_path']
-        self.samples = DataFrame([{"image_path": str(frame),
+        samples = []
+        for root in roots:
+            samples.append(DataFrame([{"image_path": str(frame),
                                 "gt_depth_path": str(frame).replace('images', 'depth').replace('.png', '.exr')}
                         for frame in root.glob('**/images/*normal.png')],
-                        columns=columns)
+                        columns=columns))
+        self.samples = pd.concat(samples)
         self.samples = self.samples.sample(n=100, random_state=42) if config.get("debug", False) else self.samples
 
         self.mode = mode
@@ -631,7 +636,7 @@ class ALLODataLoadPreprocess(Dataset):
                   "focal": 1.0} #* focal is not used in ALLO dataset, so we set it to 1.0 as a placeholder
         image = self.reader.open(image_path)
         depth_gt = read_exr_depth_as_pil(depth_path)    #* read exr file
-        seg_gt = self.reader.open(image_path.replace('images', 'segmentation_masks'))
+        seg_gt = self.reader.open(image_path.replace('images', 'segmentation_mask'))
 
         if self.mode == 'train':
             if self.config.do_random_rotate and (self.config.aug):
@@ -643,9 +648,9 @@ class ALLODataLoadPreprocess(Dataset):
 
             image = np.asarray(image, dtype=np.float32) / 255.0
             depth_gt = np.array(depth_gt, dtype=np.float32)
-            #* set depth to 0 if segmentation mask is 0 (background)
+            #* set depth to 100 if segmentation mask is 0 (background)
             seg_gt = np.asarray(seg_gt)
-            depth_gt[seg_gt == 0] = 0
+            depth_gt[seg_gt == 0] = 100
             depth_gt = np.expand_dims(depth_gt, axis=2)
 
             if self.config.aug and (self.config.random_crop):
@@ -656,7 +661,11 @@ class ALLODataLoadPreprocess(Dataset):
 
         else:
             if self.mode == 'online_eval':
-                image = np.asarray(image, dtype=np.float32) / 255.0
+                try:
+                    image = np.asarray(image, dtype=np.float32) / 255.0
+                except Exception as e:
+                    print(f"Error loading image {image_path}: {e}")
+                    raise e
                 depth_gt = np.array(depth_gt, dtype=np.float32)
                 #* set depth to 100 if segmentation mask is 0 (background)
                 seg_gt = np.asarray(seg_gt)
@@ -665,7 +674,7 @@ class ALLODataLoadPreprocess(Dataset):
 
         mask = np.logical_and(depth_gt > self.config.min_depth,
                                 depth_gt < self.config.max_depth).squeeze()[None, ...]
-        sample = {'image': image, 'depth': depth_gt, 'mask': mask, **sample}
+        sample = {'image': image, 'depth': depth_gt, 'mask': mask, "seg_gt": seg_gt, **sample}
         if mask.sum() == 0:
             sample['has_valid_depth'] = False
 
@@ -1146,28 +1155,223 @@ class STUMixDataLoadPreprocess(Dataset):
 
         return image_aug
 
+# class SemanticKITTIDataLoadPreprocess(Dataset):
+#     def __init__(self, config, mode, transform=None, is_for_online_eval=False, **kwargs):
+#         self.config = config
+#         columns = ['image_path', 'lidar_path', 'dataset', 'sequence']
+        
+#         semantickitti_sequences = ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10"]
+        
+#         if mode in ['test', 'online_eval']:
+#             semKittiRoot = Path(config.semantickitti_data_path) / "sequences"
+            
+#             #* Semantic KITTI
+#             self.semKittiSamples = DataFrame([{"image_path": str(frame),
+#                                 "lidar_path": (str(frame)
+#                                                .replace('image_2', 'velodyne')
+#                                                .replace('.png', '.bin')),
+#                                 "dataset": "semantickitti",
+#                                 "sequence": (str(frame)).split("/")[-3]}
+#                         for frame in semKittiRoot.glob('**/image_2/*.png')],
+#                         columns=columns)
+#             self.samples = self.semKittiSamples[self.semKittiSamples["sequence"].isin(semantickitti_sequences)]
+#         else:
+#             raise ValueError(f"Mode {mode} not supported")
+
+#         self.mode = mode
+#         self.transform = transform
+#         self.to_tensor = ToTensor(mode)
+#         self.is_for_online_eval = is_for_online_eval
+#         if config.use_shared_dict:
+#             self.reader = CachedReader(config.shared_dict)
+#         else:
+#             self.reader = ImReader()
+
+#     def postprocess(self, sample):
+#         return sample
+
+#     def __len__(self):
+#         return len(self.samples)
+
+#     def get_sequence_id(self, image_path, stop_name):
+#         names = image_path.split("/")
+#         sequence_path = []
+#         for name in names:
+#             if name == stop_name:
+#                 break
+#             sequence_path.append(name)
+#         sequence_path = "/".join(sequence_path)
+#         return sequence_path
+
+
+#     @staticmethod
+#     def get_calib_semantickitti(calib_path):
+#         """calib.txt: Calibration data for the cameras: P0/P1 are the 3x4 projection
+#             matrices after rectification. Here P0 denotes the left and P1 denotes the
+#             right camera. Tr transforms a point from velodyne coordinates into the
+#             left rectified camera coordinate system. In order to map a point X from the
+#             velodyne scanner to a point x in the i'th image plane, you thus have to
+#             transform it like:
+#             x = Pi * Tr * X
+#             - 'image_00': left rectified grayscale image sequence
+#             - 'image_01': right rectified grayscale image sequence
+#             - 'image_02': left rectified color image sequence
+#             - 'image_03': right rectified color image sequence
+#         """
+#         calib_all = {}
+#         with open(calib_path, "r") as f:
+#             for line in f.readlines():
+#                 if line == "\n":
+#                     break
+#                 key, value = line.split(":", 1)
+#                 calib_all[key] = np.array([float(x) for x in value.split()])
+
+#         # reshape matrices
+#         calib_out = {}
+#         calib_out["P2"] = np.identity(4)  # 4x4 matrix
+#         calib_out["P3"] = np.identity(4)  # 4x4 matrix
+#         calib_out["P2"][:3, :4] = calib_all["P2"].reshape(3, 4)
+#         calib_out["P3"][:3, :4] = calib_all["P3"].reshape(3, 4)
+#         calib_out["Tr"] = np.identity(4)  # 4x4 matrix
+#         calib_out["Tr"][:3, :4] = calib_all["Tr"].reshape(3, 4) 
+        
+#         return calib_out
+
+
+#     @staticmethod
+#     def project_points(points, rots, trans, intrins):
+#         # from lidar to camera
+#         points = points.view(-1, 1, 3) # N, 1, 3
+#         points = points - trans.view(1, -1, 3) # N, b, 3
+#         inv_rots = rots.inverse().unsqueeze(0) # 1, b, 3, 3
+#         points = (inv_rots @ points.unsqueeze(-1)) # N, b, 3, 1
+#         # the intrinsic matrix is [4, 4] for kitti and [3, 3] for nuscenes 
+#         if intrins.shape[-1] == 4:
+#             points = torch.cat((points, torch.ones((points.shape[0], points.shape[1], 1, 1))), dim=2) # N, b, 4, 1
+#             points = (intrins.unsqueeze(0) @ points).squeeze(-1) # N, b, 4
+#         else:
+#             points = (intrins.unsqueeze(0) @ points).squeeze(-1)
+
+#         points_d = points[..., 2:3] # N, b, 1
+#         points_uv = points[..., :2] / points_d # N, b, 2
+#         points_uvd = torch.cat((points_uv, points_d), dim=2)
+        
+#         return points_uvd
+
+
+#     def get_depth_from_lidar(self, image, lidar_points, intrins, rots, trans):
+#         projected_points = self.project_points(lidar_points, rots, trans, intrins)
+        
+#         img_h, img_w = image.height, image.width
+#         valid_mask = (projected_points[..., 0] >= 0) & \
+#                     (projected_points[..., 1] >= 0) & \
+#                     (projected_points[..., 0] <= img_w - 1) & \
+#                     (projected_points[..., 1] <= img_h - 1) & \
+#                     (projected_points[..., 2] > 0)
+        
+#         #? Get depth from LiDAR points
+#         gt_depth = torch.zeros((img_h, img_w))
+#         projected_points = projected_points[:, 0]
+#         valid_mask = valid_mask[:, 0]
+#         valid_points = projected_points[valid_mask]
+#         # sort
+#         depth_order = torch.argsort(valid_points[:, 2], descending=True)
+#         valid_points = valid_points[depth_order]
+#         # fill in
+#         gt_depth[valid_points[:, 1].round().long(), 
+#                 valid_points[:, 0].round().long()] = valid_points[:, 2].float()
+        
+#         #? Convert back to PIL image
+#         gt_depth = gt_depth.numpy()
+#         depth_gt = Image.fromarray(gt_depth)
+        
+#         return depth_gt
+
+
+#     def __getitem__(self, idx):
+#         image_path = self.samples.iloc[idx].image_path
+#         lidar_path = self.samples.iloc[idx].lidar_path
+#         dataset = self.samples.iloc[idx].dataset
+        
+#         sample = {"image_path": image_path, "has_valid_depth": True, "focal": 1.0} #* focal is not used in ALLO dataset, so we set it to 1.0 as a placeholder
+#         image = self.reader.open(image_path)
+#         lidar_points = np.fromfile(lidar_path, dtype=np.float32).reshape(-1, 4)
+#         lidar_points = torch.from_numpy(lidar_points[:, :3]).float()
+        
+#         #? Get sequence id
+#         #* sequence path is before "image_2"
+#         sequence_path = self.get_sequence_id(image_path, "image_2")
+        
+#         #? Get calibration info
+#         calib_path = Path(sequence_path) / "calib.txt"
+#         calib = self.get_calib_semantickitti(calib_path)
+#         intrins = torch.from_numpy(calib["P2"]).unsqueeze(0)
+#         lidar2cam = torch.from_numpy(calib["Tr"]).unsqueeze(0)
+        
+#         cam2lidar = lidar2cam.inverse()
+#         rots = cam2lidar[:, :3, :3]
+#         trans = cam2lidar[:, :3, 3]
+        
+#         depth_gt = self.get_depth_from_lidar(image, lidar_points, intrins, rots, trans)
+
+#         if self.mode in ['test', 'online_eval']:
+#             # Resize with aspect ratio and pad on bottom-right to target size
+#             # image, depth_gt = resize_and_pad_pil_pair(
+#             #     image, depth_gt, self.config.input_height, self.config.input_width
+#             # )
+#             image = np.asarray(image, dtype=np.float32) / 255.0
+#             depth_gt = np.asarray(depth_gt, dtype=np.float32)
+#             depth_gt = np.expand_dims(depth_gt, axis=2) #* (H, W, 1)
+#         else:
+#             raise ValueError(f"Mode {self.mode} not supported")
+
+#         if self.config.do_kb_crop:
+#             height = image.shape[0]
+#             width = image.shape[1]
+#             top_margin = int(height - 352)
+#             left_margin = int((width - 1216) / 2)
+#             image = image[top_margin:top_margin + 352,
+#                             left_margin:left_margin + 1216, :]
+#             depth_gt = depth_gt[top_margin:top_margin +
+#                                 352, left_margin:left_margin + 1216, :]
+
+#         mask = np.logical_and(depth_gt > self.config.min_depth,
+#                                 depth_gt < self.config.max_depth).squeeze()[None, ...]
+#         sample = {'image': image, 'depth': depth_gt, 'mask': mask, **sample}
+#         if mask.sum() == 0:
+#             sample['has_valid_depth'] = False
+
+#         if self.transform:
+#             sample = self.transform(sample)
+
+#         sample = self.postprocess(sample)   #* doesn't do anything
+#         sample['dataset'] = self.config.dataset
+#         return sample
+
+
 class SemanticKITTIDataLoadPreprocess(Dataset):
     def __init__(self, config, mode, transform=None, is_for_online_eval=False, **kwargs):
         self.config = config
         columns = ['image_path', 'lidar_path', 'dataset', 'sequence']
         
-        semantickitti_sequences = ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10"]
-        
-        if mode in ['test', 'online_eval']:
-            semKittiRoot = Path(config.semantickitti_data_path) / "sequences"
-            
-            #* Semantic KITTI
-            self.semKittiSamples = DataFrame([{"image_path": str(frame),
-                                "lidar_path": (str(frame)
-                                               .replace('image_2', 'velodyne')
-                                               .replace('.png', '.bin')),
-                                "dataset": "semantickitti",
-                                "sequence": (str(frame)).split("/")[-3]}
-                        for frame in semKittiRoot.glob('**/image_2/*.png')],
-                        columns=columns)
-            self.samples = self.semKittiSamples[self.semKittiSamples["sequence"].isin(semantickitti_sequences)]
+        if mode == 'train':
+            semantickitti_sequences = ["00", "01", "02", "03", "04", "05", "06", "07", "09", "10"]
+        elif mode in ['test', 'online_eval']:
+            semantickitti_sequences = ["08"]
         else:
             raise ValueError(f"Mode {mode} not supported")
+        
+        #* Semantic KITTI
+        semKittiRoot = Path(config.semantickitti_data_path) / "sequences"
+        self.semKittiSamples = DataFrame([{"image_path": str(frame),
+                            "lidar_path": (str(frame)
+                                            .replace('image_2', 'velodyne')
+                                            .replace('.png', '.bin')),
+                            "dataset": "semantickitti",
+                            "sequence": (str(frame)).split("/")[-3]}
+                    for frame in semKittiRoot.glob('**/image_2/*.png')],
+                    columns=columns)
+        self.samples = self.semKittiSamples[self.semKittiSamples["sequence"].isin(semantickitti_sequences)]
 
         self.mode = mode
         self.transform = transform
@@ -1304,17 +1508,9 @@ class SemanticKITTIDataLoadPreprocess(Dataset):
         trans = cam2lidar[:, :3, 3]
         
         depth_gt = self.get_depth_from_lidar(image, lidar_points, intrins, rots, trans)
-
-        if self.mode in ['test', 'online_eval']:
-            # Resize with aspect ratio and pad on bottom-right to target size
-            # image, depth_gt = resize_and_pad_pil_pair(
-            #     image, depth_gt, self.config.input_height, self.config.input_width
-            # )
-            image = np.asarray(image, dtype=np.float32) / 255.0
-            depth_gt = np.asarray(depth_gt, dtype=np.float32)
-            depth_gt = np.expand_dims(depth_gt, axis=2) #* (H, W, 1)
-        else:
-            raise ValueError(f"Mode {self.mode} not supported")
+        image = np.asarray(image, dtype=np.float32) / 255.0
+        depth_gt = np.asarray(depth_gt, dtype=np.float32)
+        depth_gt = np.expand_dims(depth_gt, axis=2) #* (H, W, 1)
 
         if self.config.do_kb_crop:
             height = image.shape[0]

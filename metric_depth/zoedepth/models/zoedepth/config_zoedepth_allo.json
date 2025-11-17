@@ -16,7 +16,7 @@
         "output_distribution": "logbinomial",
         "memory_efficient": true,
         "inverse_midas": false,
-        "img_size": [720, 1280],
+        "img_size": [672, 1344],
         "force_keep_ar": true
     },
     
@@ -24,7 +24,7 @@
         "train_midas": true,
         "use_pretrained_midas": true,
         "trainer": "zoedepth",
-        "epochs": 50,
+        "epochs": 30,
         "bs": 16,
         "optim_kwargs": {"lr": 0.000161, "wd": 0.01},
         "sched_kwargs": {"div_factor": 1, "final_div_factor": 10000, "pct_start": 0.7, "three_phase":false, "cycle_momentum": true},
@@ -35,8 +35,8 @@
         "w_grad": 0,
         "avoid_boundary": false,
         "random_crop": false,
-        "input_width": 1280,
-        "input_height": 720,
+        "input_width": 1344,
+        "input_height": 672,
         "midas_lr_factor": 50,
         "encoder_lr_factor":50,
         "pos_enc_lr_factor":50,

@@ -25,6 +25,7 @@
 import argparse
 from pprint import pprint
 import os
+from pathlib import Path
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -71,9 +72,26 @@ def predict(model, test_loader, config, round_vals=True, round_precision=3):
     metrics = RunningAverageDict()
 
     for i, sample in tqdm(enumerate(test_loader), total=len(test_loader)):
+        if config.save_images and config.save_dir is not None:
+            if sample['dataset'][0] == "semantickitti":
+                sequence_id = sample['image_path'][0].split('/')[-3]
+                frame_name = sample['image_path'][0].split('/')[-1].split('.')[0]
+                out_path = os.path.join(config.save_dir, "sequences", sequence_id)
+
+            elif sample['dataset'][0] == "allo":
+                image_path = sample['image_path'][0]
+                split = "train" if "train" in image_path else "test"
+                out_path = Path(os.path.join(config.save_dir, split, image_path.split(split)[-1][1:])).parent
+                frame_name = Path(image_path).stem
+                
+            #? Check if file already exists
+            if os.path.exists(os.path.join(out_path, f"{frame_name}.npy")):
+                continue
+
         if 'has_valid_depth' in sample:
             if not sample['has_valid_depth']:
                 continue
+        
         image, depth = sample['image'], sample['depth']
         image, depth = image.cuda(), depth.cuda()
         depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
@@ -95,13 +113,8 @@ def predict(model, test_loader, config, round_vals=True, round_precision=3):
 
         #? Save depth
         if config.save_images and config.save_dir is not None:
-            if sample['dataset'][0] == "semantickitti":
-                sequence_id = sample['image_path'][0].split('/')[-3]
-                frame_id = sample['image_path'][0].split('/')[-1].split('.')[0]
-                out_path = os.path.join(config.save_dir, "sequences",sequence_id)
-                
-                os.makedirs(out_path, exist_ok=True)
-                np.save(os.path.join(out_path, f"{frame_id}.npy"), pred_out)
+            os.makedirs(out_path, exist_ok=True)
+            np.save(os.path.join(out_path, f"{frame_name}.npy"), pred_out)
 
         metrics.update(compute_metrics(depth, pred, config=config))
 
@@ -141,6 +154,7 @@ def predict_model(model_name, pretrained_resource, dataset='semantickitti', save
     
     config = get_config(model_name, "eval", dataset, **overwrite_kwargs)
     config.save_dir = save_dir
+    config.test_all = kwargs.get("test_all", False)
     
     pprint(config)
     print(f"Evaluating and saving predictions of {model_name} on {dataset}...")
@@ -157,10 +171,12 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--dataset", type=str, required=True,
                         default='kitti', help="Dataset to evaluate on")
     parser.add_argument("--save_dir", type=str, default="./results")
-    parser.add_argument("--save_images", type=bool, default=False)
+    parser.add_argument("--save_images", action='store_true', default=False)
+    parser.add_argument("--test_all", action='store_true', default=False)
 
     args, unknown_args = parser.parse_known_args()
     overwrite_kwargs = parse_unknown(unknown_args)
+    overwrite_kwargs["test_all"] = args.test_all
 
     predict_model(args.model, pretrained_resource=args.pretrained_resource,
                 dataset=args.dataset, save_dir=args.save_dir, save_images=args.save_images, **overwrite_kwargs)
