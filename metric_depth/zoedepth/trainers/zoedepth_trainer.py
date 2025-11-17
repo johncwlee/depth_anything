@@ -70,6 +70,9 @@ class Trainer(BaseTrainer):
                 pred_depths, depths_gt, mask=mask, interpolate=True, return_interpolated=True)
             loss = self.config.w_si * l_si
             losses[self.silog_loss.name] = l_si
+            
+            if l_si > 5.0:
+                print(f"warning: SILog loss is high: {l_si.item()} for images {batch['image_path']}")
 
             if self.config.w_grad > 0:
                 l_grad = self.grad_loss(pred, depths_gt, mask=mask)
