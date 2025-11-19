@@ -34,7 +34,7 @@ import platform
 ROOT = pathlib.Path(__file__).parent.parent.resolve()
 
 # HOME_DIR = os.path.expanduser("./data")
-HOME_DIR = "/home/data"
+HOME_DIR = "/home/johnl/data"
 
 COMMON_CONFIG = {
     "save_dir": os.path.expanduser("./depth_anything_finetune"),
@@ -109,7 +109,7 @@ DATASETS_CONFIG = {
         "do_random_rotate": False,
         "degree": 1.0,
         "do_kb_crop": True,
-        "garg_crop": False,
+        "garg_crop": True,
         "eigen_crop": False,
         "use_right": False
     },
@@ -118,8 +118,8 @@ DATASETS_CONFIG = {
         "min_depth": 0.001,
         "max_depth": 100,
         "data_path": os.path.join(HOME_DIR, "allo_3d/train"),
-        "input_height": 720,
-        "input_width": 1280,  # 704
+        "input_height": 672,
+        "input_width": 1344,  # 704
         "data_path_eval": os.path.join(HOME_DIR, "allo_3d/test"),
 
         "min_depth_eval": 0.001,
@@ -130,8 +130,8 @@ DATASETS_CONFIG = {
         "do_kb_crop": False,
         "garg_crop": False,
         "eigen_crop": False,
-        "mean": [0.2083, 0.2124, 0.2146],
-        "std": [0.2669, 0.2700, 0.2711],
+        "pixel_mean": [0.18615150076452516, 0.18466143346552077, 0.1804993998048694],
+        "pixel_std": [0.24937694186317588, 0.24854584057424572, 0.24403493825212044],
     },
     "stu": {
         "dataset": "stu",
@@ -147,7 +147,7 @@ DATASETS_CONFIG = {
         "do_random_rotate": False,
         "degree": 1.0,
         "do_kb_crop": False,
-        "garg_crop": False,
+        "garg_crop": True,
         "eigen_crop": False,
         "use_right": False
     },

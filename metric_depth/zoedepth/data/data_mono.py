@@ -649,7 +649,7 @@ class ALLODataLoadPreprocess(Dataset):
             image = np.asarray(image, dtype=np.float32) / 255.0
             depth_gt = np.array(depth_gt, dtype=np.float32)
             #* set depth to 100 if segmentation mask is 0 (background)
-            seg_gt = np.asarray(seg_gt)
+            seg_gt = np.asarray(seg_gt).copy()
             depth_gt[seg_gt == 0] = 100
             depth_gt = np.expand_dims(depth_gt, axis=2)
 
@@ -666,9 +666,9 @@ class ALLODataLoadPreprocess(Dataset):
                 except Exception as e:
                     print(f"Error loading image {image_path}: {e}")
                     raise e
-                depth_gt = np.array(depth_gt, dtype=np.float32)
+                depth_gt = np.asarray(depth_gt, dtype=np.float32).copy()
                 #* set depth to 100 if segmentation mask is 0 (background)
-                seg_gt = np.asarray(seg_gt)
+                seg_gt = np.asarray(seg_gt).copy()
                 depth_gt[seg_gt == 0] = 100
                 depth_gt = np.expand_dims(depth_gt, axis=2)
 

@@ -213,7 +213,7 @@ def compute_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=True
     if gt.shape[-2:] != pred.shape[-2:] and interpolate:
         pred = nn.functional.interpolate(
             pred, gt.shape[-2:], mode='bilinear', align_corners=True)
-        intr_pred = pred
+    intr_pred = pred.clone()
 
     pred = pred.squeeze().cpu().numpy()
     pred[pred < min_depth_eval] = min_depth_eval

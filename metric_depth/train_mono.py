@@ -125,6 +125,7 @@ if __name__ == '__main__':
                         help="Random seed for reproducibility")
     parser.add_argument("--load_from", type=str, default=None,
                         help="Load from a specific checkpoint")
+    parser.add_argument("--single_node", action='store_true', default=False)
 
     args, unknown_args = parser.parse_known_args()
     overwrite_kwargs = parse_unknown(unknown_args)
@@ -150,7 +151,8 @@ if __name__ == '__main__':
     config.root = config.save_dir = args.save_dir
     config.seed = args.seed
     config.checkpoint = args.load_from
-
+    config.distributed = not args.single_node
+    config.test_all = False
     if config.use_shared_dict:
         shared_dict = mp.Manager().dict()
     else:

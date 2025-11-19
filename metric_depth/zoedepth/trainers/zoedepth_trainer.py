@@ -61,7 +61,7 @@ class Trainer(BaseTrainer):
 
         losses = {}
 
-        with amp.autocast(enabled=self.config.use_amp):
+        with torch.amp.autocast('cuda', enabled=self.config.use_amp):
 
             output = self.model(images)
             pred_depths = output['metric_depth']
@@ -108,7 +108,7 @@ class Trainer(BaseTrainer):
     
     @torch.no_grad()
     def eval_infer(self, x):
-        with amp.autocast(enabled=self.config.use_amp):
+        with torch.amp.autocast('cuda', enabled=self.config.use_amp):
             m = self.model.module if self.config.multigpu else self.model
             pred_depths = m(x)['metric_depth']
         return pred_depths
@@ -165,7 +165,7 @@ class Trainer(BaseTrainer):
             pred_depths = self.eval_infer(images)
         pred_depths = pred_depths.squeeze().unsqueeze(0).unsqueeze(0)
 
-        with amp.autocast(enabled=self.config.use_amp):
+        with torch.amp.autocast('cuda', enabled=self.config.use_amp):
             l_depth = self.silog_loss(
                 pred_depths, depths_gt, mask=mask.to(torch.bool), interpolate=True)
 

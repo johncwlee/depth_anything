@@ -25,7 +25,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.cuda.amp as amp
+# import torch.cuda.amp as amp
 import numpy as np
 
 
@@ -70,7 +70,7 @@ class SILogLoss(nn.Module):
                 else:
                     return torch.tensor(0.0, device=input.device), intr_input
 
-        with amp.autocast(enabled=False):  # amp causes NaNs in this loss function
+        with torch.amp.autocast('cuda', enabled=False):  # amp causes NaNs in this loss function
             alpha = 1e-7
             g = torch.log(input + alpha) - torch.log(target + alpha)
 
