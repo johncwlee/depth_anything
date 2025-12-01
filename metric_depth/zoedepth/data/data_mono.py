@@ -657,7 +657,7 @@ class ALLODataLoadPreprocess(Dataset):
                 image, depth_gt = self.random_crop(
                     image, depth_gt, self.config.input_height, self.config.input_width)
 
-            image, depth_gt = self.train_preprocess(image, depth_gt)
+            image, depth_gt, seg_gt = self.train_preprocess(image, depth_gt, seg_gt)
 
         else:
             if self.mode == 'online_eval':
@@ -718,20 +718,28 @@ class ALLODataLoadPreprocess(Dataset):
         # print("after", img.shape, depth.shape)
         return img, depth
 
-    def train_preprocess(self, image, depth_gt):
+    def train_preprocess(self, image, depth_gt, seg_gt):
         if self.config.aug:
-            # Random flipping
-            do_flip = random.random()
-            if do_flip > 0.5:
-                image = (image[:, ::-1, :]).copy()
-                depth_gt = (depth_gt[:, ::-1, :]).copy()
+            # Random horizontal flipping
+            if self.config.get("random_horizontal_flip", False):
+                if random.random() > 0.5:
+                    image = (image[:, ::-1, :]).copy()
+                    depth_gt = (depth_gt[:, ::-1, :]).copy()
+                    seg_gt = (seg_gt[:, ::-1]).copy()
+
+            # Random vertical flipping
+            if self.config.get("random_vertical_flip", False):
+                if random.random() > 0.5:
+                    image = (image[::-1, :, :]).copy()
+                    depth_gt = (depth_gt[::-1, :, :]).copy()
+                    seg_gt = (seg_gt[::-1, :]).copy()
 
             # Random gamma, brightness, color augmentation
             do_augment = random.random()
             if do_augment > 0.5:
                 image = self.augment_image(image)
 
-        return image, depth_gt
+        return image, depth_gt, seg_gt
 
     def augment_image(self, image):
         # gamma augmentation
