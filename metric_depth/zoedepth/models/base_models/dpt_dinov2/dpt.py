@@ -146,8 +146,8 @@ class DPT_DINOv2(nn.Module):
     def forward(self, x):
         h, w = x.shape[-2:]
 
-        features = self.pretrained.get_intermediate_layers(x, 4, return_class_token=True)
-        # features = self.pretrained.get_intermediate_layers(x, [7, 11, 15, 23], return_class_token=True)
+        # features = self.pretrained.get_intermediate_layers(x, 4, return_class_token=True)
+        features = self.pretrained.get_intermediate_layers(x, [7, 11, 15, 23], return_class_token=True)
         
         patch_h, patch_w = h // 14, w // 14
 
