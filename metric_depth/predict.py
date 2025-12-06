@@ -66,13 +66,38 @@ def infer(model, images, **kwargs):
     return mean_pred
 
 
+def run_inference(image, depth, model, config, sample):
+    focal = sample.get('focal', torch.Tensor(
+        [715.0873]).cuda())  # This magic number (focal) is only used for evaluating BTS model
+    pred = infer(model, image, dataset=sample['dataset'][0], focal=focal)
+    
+    pred_out = pred.clone()
+    if depth.shape[-2:] != pred_out.shape[-2:]:
+        pred_out = F.interpolate(
+            pred_out, depth.shape[-2:], mode='bilinear', align_corners=True)
+
+    pred_out = pred.clone()
+    pred_out = pred_out.squeeze().cpu().numpy()
+    pred_out[pred_out < config.min_depth_eval] = config.min_depth_eval
+    pred_out[pred_out > config.max_depth_eval] = config.max_depth_eval
+    pred_out[np.isinf(pred_out)] = config.max_depth_eval
+    pred_out[np.isnan(pred_out)] = config.min_depth_eval
+    
+    return pred,pred_out
+
 @torch.no_grad()
 def predict(model, test_loader, config, round_vals=True, round_precision=3):
     model.eval()
     metrics = RunningAverageDict()
 
     for i, sample in tqdm(enumerate(test_loader), total=len(test_loader)):
-        if config.save_images and config.save_dir is not None:
+        image, depth = sample['image'], sample['depth']
+        image, depth = image.cuda(), depth.cuda()
+        depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
+        
+        pred, pred_out = run_inference(image, depth, model, config, sample)
+        
+        if config.save_dir is not None:
             if sample['dataset'][0] == "semantickitti":
                 sequence_id = sample['image_path'][0].split('/')[-3]
                 frame_name = sample['image_path'][0].split('/')[-1].split('.')[0]
@@ -83,38 +108,14 @@ def predict(model, test_loader, config, round_vals=True, round_precision=3):
                 split = "train" if "train" in image_path else "test"
                 out_path = Path(os.path.join(config.save_dir, split, image_path.split(split)[-1][1:])).parent
                 frame_name = Path(image_path).stem
-                
-            #? Check if file already exists
-            if os.path.exists(os.path.join(out_path, f"{frame_name}.npy")):
-                continue
+            
+            if config.save_images and not os.path.exists(os.path.join(out_path, f"{frame_name}.npy")):
+                os.makedirs(out_path, exist_ok=True)
+                np.save(os.path.join(out_path, f"{frame_name}.npy"), pred_out)
 
         if 'has_valid_depth' in sample:
             if not sample['has_valid_depth']:
                 continue
-        
-        image, depth = sample['image'], sample['depth']
-        image, depth = image.cuda(), depth.cuda()
-        depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
-        focal = sample.get('focal', torch.Tensor(
-            [715.0873]).cuda())  # This magic number (focal) is only used for evaluating BTS model
-        pred = infer(model, image, dataset=sample['dataset'][0], focal=focal)
-        
-        pred_out = pred.clone()
-        if depth.shape[-2:] != pred_out.shape[-2:]:
-            pred_out = F.interpolate(
-                pred_out, depth.shape[-2:], mode='bilinear', align_corners=True)
-
-        pred_out = pred.clone()
-        pred_out = pred_out.squeeze().cpu().numpy()
-        pred_out[pred_out < config.min_depth_eval] = config.min_depth_eval
-        pred_out[pred_out > config.max_depth_eval] = config.max_depth_eval
-        pred_out[np.isinf(pred_out)] = config.max_depth_eval
-        pred_out[np.isnan(pred_out)] = config.min_depth_eval
-
-        #? Save depth
-        if config.save_images and config.save_dir is not None:
-            os.makedirs(out_path, exist_ok=True)
-            np.save(os.path.join(out_path, f"{frame_name}.npy"), pred_out)
 
         metrics.update(compute_metrics(depth, pred, config=config))
 
