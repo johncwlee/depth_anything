@@ -118,6 +118,8 @@ DATASETS_CONFIG = {
         "min_depth": 0.001,
         "max_depth": 100,
         "data_path": os.path.join(HOME_DIR, "allo_3d/train"),
+        # "input_height": 720,
+        # "input_width": 1280,  # 704
         "input_height": 672,
         "input_width": 1344,  # 704
         "data_path_eval": os.path.join(HOME_DIR, "allo_3d/test"),
@@ -126,12 +128,16 @@ DATASETS_CONFIG = {
         "max_depth_eval": 100,
 
         "do_random_rotate": True,
-        "degree": 10.0,
+        "degree": 20.0,
         "do_kb_crop": False,
         "garg_crop": False,
         "eigen_crop": False,
-        "pixel_mean": [0.18615150076452516, 0.18466143346552077, 0.1804993998048694],
-        "pixel_std": [0.24937694186317588, 0.24854584057424572, 0.24403493825212044],
+        "random_horizontal_flip": True,
+        "random_vertical_flip": True,
+        "mean": [0.18615150076452516, 0.18466143346552077, 0.1804993998048694],
+        "std": [0.24937694186317588, 0.24854584057424572, 0.24403493825212044],
+        # "mean": [0.2083, 0.2124, 0.2146],
+        # "std": [0.2669, 0.2700, 0.2711],
     },
     "stu": {
         "dataset": "stu",
@@ -211,6 +217,8 @@ COMMON_TRAINING_CONFIG = {
     "aug": True,
     "random_crop": False,
     "random_translate": False,
+    "random_horizontal_flip": False,
+    "random_vertical_flip": False,
     "translate_prob": 0.2,
     "max_translation": 100,
 
