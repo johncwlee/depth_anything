@@ -74,10 +74,10 @@ def load_ckpt(config, model, checkpoint_dir="./checkpoints", ckpt_type="best"):
         checkpoint = matches[0]
 
     else:
-        return model
+        return model, None
     model = load_wts(model, checkpoint)
     print("Loaded weights from {0}".format(checkpoint))
-    return model
+    return model, checkpoint
 
 
 def main_worker(gpu, ngpus_per_node, config):
@@ -89,7 +89,7 @@ def main_worker(gpu, ngpus_per_node, config):
 
         model = build_model(config)
 
-        model = load_ckpt(config, model)
+        model, checkpoint_path = load_ckpt(config, model)
         model = parallelize(config, model)
 
         total_params = f"{round(count_parameters(model)/1e6,2)}M"
@@ -101,6 +101,9 @@ def main_worker(gpu, ngpus_per_node, config):
 
         trainer = get_trainer(config)(
             config, model, train_loader, test_loader, device=config.gpu)
+
+        if config.resume and checkpoint_path is not None:
+            trainer.resume_checkpoint(checkpoint_path)
 
         trainer.train()
     finally:
@@ -125,7 +128,10 @@ if __name__ == '__main__':
                         help="Random seed for reproducibility")
     parser.add_argument("--load_from", type=str, default=None,
                         help="Load from a specific checkpoint")
+    parser.add_argument("--resume", action='store_true', default=False,
+                        help="Resume training from the checkpoint specified in --load_from")
     parser.add_argument("--single_node", action='store_true', default=False)
+    parser.add_argument("--no_log", action='store_true', default=False)
 
     args, unknown_args = parser.parse_known_args()
     overwrite_kwargs = parse_unknown(unknown_args)
@@ -153,6 +159,7 @@ if __name__ == '__main__':
     config.checkpoint = args.load_from
     config.distributed = not args.single_node
     config.test_all = False
+    config.resume = args.resume
     if config.use_shared_dict:
         shared_dict = mp.Manager().dict()
     else:
@@ -168,6 +175,8 @@ if __name__ == '__main__':
         config.debug = True
         config.distributed = False
         config.batch_size = 2
+        config.log = False
+    if args.no_log:
         config.log = False
     try:
         node_str = os.environ['SLURM_JOB_NODELIST'].replace(

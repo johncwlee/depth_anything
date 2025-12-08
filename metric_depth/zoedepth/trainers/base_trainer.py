@@ -60,6 +60,9 @@ class BaseTrainer:
         self.test_loader = test_loader
         self.optimizer = self.init_optimizer()
         self.scheduler = self.init_scheduler()
+        self.step = 0
+        self.start_epoch = 0
+        self._skip_batches_in_epoch = 0
 
     def resize_to_target(self, prediction, target):
         if prediction.shape[2:] != target.shape[-2:]:
@@ -91,6 +94,41 @@ class BaseTrainer:
         warnings.warn(
             "Resuming training is not properly supported in this repo. Implement loading / saving of optimizer and scheduler to support it.")
         self.model = model
+
+    def resume_checkpoint(self, checkpoint_path):
+        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        m = self.model.module if self.config.multigpu else self.model
+        m.load_state_dict(checkpoint["model"])
+        if "optimizer" in checkpoint and checkpoint["optimizer"] is not None:
+            self.optimizer.load_state_dict(checkpoint["optimizer"])
+        if "scheduler" in checkpoint and checkpoint["scheduler"] is not None:
+            self.scheduler.load_state_dict(checkpoint["scheduler"])
+        ckpt_epoch = checkpoint.get("epoch")
+        ckpt_step = checkpoint.get("step")
+
+        if ckpt_step is not None:
+            self.step = ckpt_step
+
+        self._skip_batches_in_epoch = 0
+        iters_per_epoch = self.iters_per_epoch
+
+        if ckpt_epoch is not None:
+            # Start from the same epoch unless we fully completed it
+            self.start_epoch = ckpt_epoch
+
+            if ckpt_step is not None and iters_per_epoch > 0:
+                step_in_epoch = ckpt_step % iters_per_epoch
+                if step_in_epoch == 0 and ckpt_step > 0:
+                    # Finished the epoch recorded in the checkpoint; move to the next one
+                    self.start_epoch = ckpt_epoch + 1
+                else:
+                    # Resume partway through an epoch and skip already processed batches
+                    self._skip_batches_in_epoch = step_in_epoch
+
+        print(
+            f"Resuming training from {checkpoint_path} at epoch {self.start_epoch} "
+            f"(skip {self._skip_batches_in_epoch} batches) and step {self.step}"
+        )
 
     def init_optimizer(self):
         m = self.model.module if self.config.multigpu else self.model
@@ -156,7 +194,7 @@ class BaseTrainer:
                        tags=tags, notes=self.config.notes, settings=wandb.Settings(start_method="fork"))
 
         self.model.train()
-        self.step = 0
+        # self.step = 0
         best_loss = np.inf
         validate_every = int(self.config.validate_every * self.iters_per_epoch)
 
@@ -170,17 +208,21 @@ class BaseTrainer:
         losses = {}
         def stringify_losses(L): return "; ".join(map(
             lambda kv: f"{colors.fg.purple}{kv[0]}{colors.reset}: {round(kv[1].item(),3):.4e}", L.items()))
-        for epoch in range(self.config.epochs):
+        for epoch in range(self.start_epoch, self.config.epochs):
             if self.should_early_stop():
                 break
             
             self.epoch = epoch
+            skip_batches = self._skip_batches_in_epoch if epoch == self.start_epoch else 0
             ################################# Train loop ##########################################################
             if self.should_log:
                 wandb.log({"Epoch": epoch}, step=self.step)
             pbar = tqdm(enumerate(self.train_loader), desc=f"Epoch: {epoch + 1}/{self.config.epochs}. Loop: Train",
                         total=self.iters_per_epoch) if is_rank_zero(self.config) else enumerate(self.train_loader)
             for i, batch in pbar:
+                if skip_batches and i < skip_batches:
+                    continue
+
                 if self.should_early_stop():
                     print("Early stopping")
                     break
@@ -282,8 +324,10 @@ class BaseTrainer:
         torch.save(
             {
                 "model": m.state_dict(),
-                "optimizer": None,  # TODO : Change to self.optimizer.state_dict() if resume support is needed, currently None to reduce file size
-                "epoch": self.epoch
+                "optimizer": self.optimizer.state_dict(),
+                "scheduler": self.scheduler.state_dict(),
+                "epoch": self.epoch,
+                "step": self.step
             }, fpath)
 
     def log_images(self, rgb: Dict[str, list] = {}, depth: Dict[str, list] = {}, scalar_field: Dict[str, list] = {}, prefix="", scalar_cmap="jet", min_depth=None, max_depth=None):
