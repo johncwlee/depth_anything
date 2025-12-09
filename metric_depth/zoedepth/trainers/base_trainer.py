@@ -190,8 +190,12 @@ class BaseTrainer:
         if self.should_log:
             tags = self.config.tags.split(
                 ',') if self.config.tags != '' else None
+            wandb_settings = {"start_method": "fork"}
+            wandb_mode = getattr(self.config, "wandb_mode", None)
+            if wandb_mode:
+                wandb_settings["mode"] = wandb_mode
             wandb.init(project=self.config.project, name=self.config.name, config=flatten(self.config), dir=self.config.root,
-                       tags=tags, notes=self.config.notes, settings=wandb.Settings(start_method="fork"))
+                       tags=tags, notes=self.config.notes, settings=wandb.Settings(**wandb_settings))
 
         self.model.train()
         # self.step = 0

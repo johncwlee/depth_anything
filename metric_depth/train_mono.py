@@ -136,9 +136,14 @@ if __name__ == '__main__':
                         help="Resume training from the checkpoint specified in --load_from")
     parser.add_argument("--single_node", action='store_true', default=False)
     parser.add_argument("--no_log", action='store_true', default=False)
+    parser.add_argument("--wandb_offline", action='store_true', default=False,
+                        help="Run wandb logging in offline mode")
 
     args, unknown_args = parser.parse_known_args()
     overwrite_kwargs = parse_unknown(unknown_args)
+    
+    if args.wandb_offline:
+        os.environ["WANDB_MODE"] = "offline"
     
     if not args.debug:
         mp.set_start_method('forkserver')
@@ -168,6 +173,7 @@ if __name__ == '__main__':
     config.distributed = not args.single_node
     config.test_all = False
     config.resume = args.resume
+    config.wandb_mode = "offline" if args.wandb_offline else None
     if config.use_shared_dict:
         shared_dict = mp.Manager().dict()
     else:
