@@ -126,6 +126,10 @@ if __name__ == '__main__':
     parser.add_argument("--project", type=str, default="Depth-Anything")
     parser.add_argument("--seed", type=int, default=43,
                         help="Random seed for reproducibility")
+    parser.add_argument("--epochs", type=int, default=None,
+                        help="Number of training epochs (overrides config)")
+    parser.add_argument("--lr", "--learning-rate", dest="lr", type=float, default=None,
+                        help="Learning rate for optimizer (overrides config)")
     parser.add_argument("--load_from", type=str, default=None,
                         help="Load from a specific checkpoint")
     parser.add_argument("--resume", action='store_true', default=False,
@@ -142,6 +146,10 @@ if __name__ == '__main__':
     overwrite_kwargs["model"] = args.model
     if args.trainer is not None:
         overwrite_kwargs["trainer"] = args.trainer
+    if args.epochs is not None:
+        overwrite_kwargs["epochs"] = args.epochs
+    if args.lr is not None:
+        overwrite_kwargs["lr"] = args.lr
 
     if args.dataset == "allo":
         overwrite_kwargs["config_version"] = "allo"
