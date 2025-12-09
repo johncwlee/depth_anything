@@ -201,7 +201,9 @@ if __name__ == '__main__':
         config.gpu = None
 
     ngpus_per_node = torch.cuda.device_count()
-    config.num_workers = 0 if args.debug else args.workers
+    worker_count = 0 if args.debug else args.workers
+    config.num_workers = worker_count
+    config.workers = worker_count
     config.ngpus_per_node = ngpus_per_node
     print("Config:")
     pprint(config)
